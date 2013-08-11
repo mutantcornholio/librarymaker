@@ -3,7 +3,7 @@
 WATCH_DIR = '/home/cornholio/sda1/music/.artists'
 DEST_DIR = '/home/cornholio/sda1/music/test'
 LOG_FILE = '/var/log/librarymaker.log'
-IGNORE_LIST = [u'rock', u'instrumental', u'electronic', u'hard rock', u'alternative', u'icelandic', u'schlau machen']
+IGNORE_LIST = [u'rock', u'instrumental', u'electronic']
 RETRY_INTERVAL=2 #in seconds
 POPULARITY_THRESHOLD = 0.4 #if *this * valid tag popularity is less than (first tag 
 					#popularity)*POPULARITY_THRESHOLD, *this* and less popular ones do not count
@@ -14,7 +14,6 @@ COMPILATIONS = 'false' #if true, daemon works differently with directories
 
 
 API_KEY = '94225c093fbb4a47e6f557af056baf20'
-# API_SECRET = 'a6981f56e9dc961122bc3ceedaf62294'
 API_SECRET = ''
 
 import pyinotify
