@@ -9,11 +9,22 @@ import logging
 from time import sleep
 import simplejson
 
-CONFIG_PATH = os.path.expanduser('~/.librarymakerrc.json')
+parser = argparse.ArgumentParser(description='A python script, that organizes your library in tags, using symlinks.\n\
+https://github.com/mutantcornholio/librarymaker')
+parser.add_argument('-r', '--rebuild', dest='REBUILD', action='store_true',\
+				help='rescan existing library, not only watch for new items')
+parser.add_argument('-c','--config-file', dest='CONFIG_PATH', default='~/.librarymakerrc.json',\
+				help='choose a different location for a config file')
+
+CONFIG_PATH = os.path.expanduser(parser.parse_args().CONFIG_PATH)
+REBUILD = parser.parse_args().REBUILD
 
 if not os.access(CONFIG_PATH, os.R_OK):
-	sys.stderr.write('Can\'t work without a config file. Consider creating one in %s, \
+	if CONFIG_PATH==os.path.expanduser('~/.librarymakerrc.json'):
+		sys.stderr.write('Can\'t work without a config file. Consider creating one in %s, \
 or run me with --config-file argument\n' % os.path.expanduser('~/.librarymakerrc.json'))
+	else:
+		sys.stderr.write('%s: No such file or premission was denied\n' % CONFIG_PATH)
 	exit()
 
 try:
@@ -127,7 +138,8 @@ class Artist(object):
 							logging.warning('%s is a symlink, but \
 it is leading to %s instead of %s' % artist_dir, os.readlink(artist_dir), os.path.join(WATCH_DIR, self.name))
 				else:
-					logging.warning('can\'t make directory, something\'s wrong, something\'s not quite right: %s' % os.path.join(WATCH_DIR,self.name))
+					logging.warning('can\'t make directory, something\'s wrong, \
+something\'s not quite right: %s' % os.path.join(WATCH_DIR,self.name))
 
 class VA(object):
 	def __init__(self, name):
@@ -157,5 +169,8 @@ watching_events = pyinotify.IN_CREATE
 handler=EventHandler()
 notifier = pyinotify.Notifier(watch_manager, handler)
 watch = watch_manager.add_watch(WATCH_DIR, watching_events, rec=False)
+
+if REBUILD:
+	rebuild()
 
 notifier.loop()
