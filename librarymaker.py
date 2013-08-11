@@ -1,21 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
-WATCH_DIR = '/home/cornholio/sda1/music/.artists'
-DEST_DIR = '/home/cornholio/sda1/music/test'
-LOG_FILE = '/var/log/librarymaker.log'
-IGNORE_LIST = [u'rock', u'instrumental', u'electronic', u'hard rock', u'alternative', u'icelandic', u'schlau machen']
-RETRY_INTERVAL=2 #in seconds
-POPULARITY_THRESHOLD = 0.4 #if *this * valid tag popularity is less than (first tag 
-					#popularity)*POPULARITY_THRESHOLD, *this* and less popular ones do not count
-COMPILATIONS = 'false' #if true, daemon works differently with directories
-						#starting with "VA -". It looks for tags in files inside
-						#the directory and count mean tags for entire compilation
-						#(not implemented yet)
-
-
-API_KEY = '94225c093fbb4a47e6f557af056baf20'
-API_SECRET = ''
-
 import pyinotify
 import argparse
 import pylast
@@ -23,6 +7,33 @@ import os
 import sys
 import logging
 from time import sleep
+import simplejson
+
+CONFIG_PATH = os.path.expanduser('~/.librarymakerrc.json')
+
+if not os.access(CONFIG_PATH, os.R_OK):
+	sys.stderr.write('Can\'t work without a config file. Consider creating one in %s, \
+or run me with --config-file argument\n' % os.path.expanduser('~/.librarymakerrc.json'))
+	exit()
+
+try:
+	config = simplejson.loads(open(CONFIG_PATH, 'r').read())
+	WATCH_DIR=config['WATCH_DIR']
+	DEST_DIR=config['DEST_DIR']
+	LOG_FILE=config['LOG_FILE']
+	IGNORE_LIST=config['IGNORE_LIST']
+	RETRY_INTERVAL=float(config['RETRY_INTERVAL'])
+	POPULARITY_THRESHOLD=float(config['POPULARITY_THRESHOLD'])
+	COMPILATIONS=bool(config['COMPILATIONS'])
+	API_KEY=config['API_KEY']
+except simplejson.decoder.JSONDecodeError, e:
+	sys.stderr.write('Something\'s wrong with your config file: %s. Exiting.\n' % e.message)
+	exit()
+except KeyError, e:
+	sys.stderr.write('%s is missing in your config file. Exiting.\n' % e.message)
+	exit()
+except ValueError, e:
+	sys.stderr.write('There\'s a problem in your config file: %s. Exiting.\n' % e.message)
 
 if not os.path.isdir(WATCH_DIR):
 	sys.stderr.write('%s do not exist or not a directory, exiting\n' % WATCH_DIR)
@@ -40,7 +51,7 @@ if not os.access(LOG_FILE, os.W_OK):
 	sys.stderr.write('you do not seem to have write rights to this log file: "%s", exiting \n' % LOG_FILE)
 	exit()
 
-network = pylast.LastFMNetwork(api_key = API_KEY, api_secret = API_SECRET)
+network = pylast.LastFMNetwork(api_key = API_KEY)
 
 class Tag(object):
 	def __init__(self, name, weight):
