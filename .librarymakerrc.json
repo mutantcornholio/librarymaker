@@ -1,0 +1,10 @@
+{
+  "WATCH_DIR": "/home/username/music/.artists",
+  "DEST_DIR": "/home/username/music/",
+  "LOG_FILE": "/var/log/librarymaker.log",
+  "IGNORE_LIST": ["rock", "instrumental", "electronic"],
+  "RETRY_INTERVAL": "2",
+  "POPULARITY_THRESHOLD": "0.4",
+  "COMPILATIONS": "False",
+  "API_KEY": "94225c093fbb4a47e6f557af056baf20"
+}
