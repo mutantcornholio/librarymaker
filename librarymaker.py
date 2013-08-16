@@ -154,7 +154,21 @@ class EventHandler(pyinotify.ProcessEvent):
     		artist.make_ln()
     	else:
     		logging.info('%s appeared, but it is not a directory. Ignoring.' % os.path.basename(event.pathname))
-        
+
+    def process_IN_DELETE(self, event):
+    	logging.info('%s has been deleted' % event.pathname)
+    	for item in os.listdir(DEST_DIR):
+    		item=os.path.join(DEST_DIR,item)
+    		if os.path.isdir(item):
+    			for item_inside in os.listdir(item):
+    				item_inside=os.path.join(item,item_inside)
+    				if os.path.islink(item_inside) and os.readlink(item_inside)==os.path.join(WATCH_DIR,event.pathname):
+    					try:
+    						os.unlink(item_inside)
+    						logging.info('%s has been removed from %s' % (os.path.basename(event.pathname), os.path.basename(item)))
+    					except Exception, e:
+    						logging.error('Can\'t remove %s: %s' % (item_inside, e.message))        
+
 def rebuild():
 	artist_names = map(lambda s: s.decode('utf8',errors='ignore'), os.listdir(WATCH_DIR))
 	artists=map(Artist, artist_names)
@@ -165,7 +179,7 @@ def rebuild():
 		
 logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.INFO)
 watch_manager = pyinotify.WatchManager()
-watching_events = pyinotify.IN_CREATE
+watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
 handler=EventHandler()
 notifier = pyinotify.Notifier(watch_manager, handler)
 watch = watch_manager.add_watch(WATCH_DIR, watching_events, rec=False)
