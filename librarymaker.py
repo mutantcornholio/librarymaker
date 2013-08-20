@@ -169,7 +169,18 @@ class EventHandler(pyinotify.ProcessEvent):
     					except Exception, e:
     						logging.error('Can\'t remove %s: %s' % (item_inside, e.message))        
 
+def kill_zombie_musicians(folder):
+	print folder
+	for item in os.listdir(folder):
+		item=os.path.join(folder, item)
+		if os.path.islink(item) and not os.access(os.readlink(item),os.F_OK):
+			print 'YEAH'
+			os.unlink(item)
+			logging.info('%s has been removed from %s' % (os.path.basename(item), os.path.basename(folder)))
+
 def rebuild():
+	for item in os.listdir(DEST_DIR):
+		kill_zombie_musicians(os.path.join(DEST_DIR,item))
 	artist_names = map(lambda s: s.decode('utf8',errors='ignore'), os.listdir(WATCH_DIR))
 	artists=map(Artist, artist_names)
 	for artist in artists:
