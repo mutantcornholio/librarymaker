@@ -29,9 +29,9 @@ or run me with --config-file argument\n' % os.path.expanduser('~/.librarymakerrc
 
 try:
 	config = simplejson.loads(open(CONFIG_PATH, 'r').read())
-	WATCH_DIR=config['WATCH_DIR']
-	DEST_DIR=config['DEST_DIR']
-	LOG_FILE=config['LOG_FILE']
+	WATCH_DIR=os.path.normpath(config['WATCH_DIR'])
+	DEST_DIR=os.path.normpath(config['DEST_DIR'])
+	LOG_FILE=os.path.normpath(config['LOG_FILE'])
 	IGNORE_LIST=config['IGNORE_LIST']
 	RETRY_INTERVAL=float(config['RETRY_INTERVAL'])
 	POPULARITY_THRESHOLD=float(config['POPULARITY_THRESHOLD'])
@@ -105,7 +105,7 @@ class Artist(object):
 				logging.error('Network error')
 				sleep(RETRY_INTERVAL)
 		for tag in top_tags:
-			self.tags.append(Tag(tag.item.name, int(tag.weight)))
+			self.tags.append(Tag(tag.item.name.lower(), int(tag.weight)))
 
 	def tags_calculate(self):
 		previous_weight=0
@@ -146,35 +146,65 @@ class VA(object):
 		self.name = name
 
 class EventHandler(pyinotify.ProcessEvent):
-    def process_IN_CREATE(self, event):
-    	if os.path.isdir(event.pathname):
-    		artist=Artist(os.path.basename(event.pathname))
-    		artist.tags_fetch()
-    		artist.tags_calculate()
-    		artist.make_ln()
-    	else:
-    		logging.info('%s appeared, but it is not a directory. Ignoring.' % os.path.basename(event.pathname))
+	def __del_artist_from_tag(self, link):
+		try:
+			os.unlink(link)
+			logging.info('%s has been removed from %s' % (os.path.basename(link), os.path.basename(os.path.dirname(link))))
+		except Exception, e:
+			logging.error('Can\'t remove %s: %s' % (link, e.message))
 
-    def process_IN_DELETE(self, event):
-    	logging.info('%s has been deleted' % event.pathname)
-    	for item in os.listdir(DEST_DIR):
-    		item=os.path.join(DEST_DIR,item)
-    		if os.path.isdir(item):
-    			for item_inside in os.listdir(item):
-    				item_inside=os.path.join(item,item_inside)
-    				if os.path.islink(item_inside) and os.readlink(item_inside)==os.path.join(WATCH_DIR,event.pathname):
-    					try:
-    						os.unlink(item_inside)
-    						logging.info('%s has been removed from %s' % (os.path.basename(event.pathname), os.path.basename(item)))
-    					except Exception, e:
-    						logging.error('Can\'t remove %s: %s' % (item_inside, e.message))        
+	def __event_path_determine(self, path):
+		if os.path.dirname(path)==WATCH_DIR:
+			self.event_type='artist'
+		elif os.path.dirname(path)==DEST_DIR:
+			self.event_type='tag'
+		elif os.path.dirname(os.path.dirname(path))==DEST_DIR:
+			self.event_type='tag-artist'
+		else:
+			self.event_type='invalid'
+
+	def __artist_create(self, path):
+		if os.path.isdir(path):
+			artist=Artist(str.decode(os.path.basename(path),'utf8'))
+			artist.tags_fetch()
+			artist.tags_calculate()
+			artist.make_ln()
+		else:
+			logging.info('%s appeared, but it is not a directory. Ignoring.' % os.path.basename(path))
+
+	def __artist_delete(self, path):
+		logging.info('%s has been deleted' % path)
+		for tag in os.listdir(DEST_DIR):
+			tag=os.path.join(DEST_DIR,tag)
+			if os.path.isdir(tag):
+				for artist in os.listdir(tag):
+					artist=os.path.join(tag,artist)
+					if os.path.islink(artist) and os.readlink(artist)==os.path.join(WATCH_DIR,path):
+	   					self.__del_artist_from_tag(artist)
+		pass
+
+	def process_IN_CREATE(self, event):
+		self.__event_path_determine(event.pathname)
+		if self.event_type == 'artist':
+			self.__artist_create(event.pathname)
+			
+	def process_IN_DELETE(self, event):
+		self.__event_path_determine(event.pathname)
+		if self.event_type == 'artist':
+			self.__artist_delete(event.pathname)		
+
+       
+# class DestDirEventHandler(pyinotify.ProcessEvent):
+# 	def process_IN_DELETE(self, event):
+# 		print 'deleted'
+# 		if (os.path.islink(event.pathname) and 
+# 			os.path.normpath(os.path.dirname(os.readlink(event.pathname)))==WATCH_DIR ):
+# 			print 'GOTCHA'
 
 def kill_zombie_musicians(folder):
-	print folder
 	for item in os.listdir(folder):
 		item=os.path.join(folder, item)
 		if os.path.islink(item) and not os.access(os.readlink(item),os.F_OK):
-			print 'YEAH'
 			os.unlink(item)
 			logging.info('%s has been removed from %s' % (os.path.basename(item), os.path.basename(folder)))
 
@@ -193,7 +223,8 @@ watch_manager = pyinotify.WatchManager()
 watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
 handler=EventHandler()
 notifier = pyinotify.Notifier(watch_manager, handler)
-watch = watch_manager.add_watch(WATCH_DIR, watching_events, rec=False)
+watch_dir_watch = watch_manager.add_watch(WATCH_DIR, watching_events, rec=False)
+dest_dir_watch = watch_manager.add_watch(DEST_DIR, watching_events, rec=True)
 
 if REBUILD:
 	rebuild()
