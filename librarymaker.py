@@ -27,6 +27,11 @@ or run me with --config-file argument\n' % os.path.expanduser('~/.librarymakerrc
 		sys.stderr.write('%s: No such file or premission was denied\n' % CONFIG_PATH)
 	exit()
 
+if not os.access(CONFIG_PATH, os.W_OK):
+	sys.stderr.write('%s: you do not seem to have write rights to config file\
+located in \n' % CONFIG_PATH)
+	exit()
+
 try:
 	config = simplejson.loads(open(CONFIG_PATH, 'r').read())
 	WATCH_DIR=os.path.normpath(config['WATCH_DIR'])
@@ -63,6 +68,20 @@ if not os.access(LOG_FILE, os.W_OK):
 	exit()
 
 network = pylast.LastFMNetwork(api_key = API_KEY)
+
+def config_write():
+	dump={
+		'WATCH_DIR':WATCH_DIR,
+		'DEST_DIR':DEST_DIR,
+		'LOG_FILE':LOG_FILE,
+		'IGNORE_LIST':IGNORE_LIST,
+		'RETRY_INTERVAL':RETRY_INTERVAL,
+		'POPULARITY_THRESHOLD':POPULARITY_THRESHOLD,
+		'COMPILATIONS':COMPILATIONS,
+		'API_KEY':API_KEY
+	}
+	open(CONFIG_PATH, 'w').write(simplejson.dumps(dump))
+	logging.info('config file has been updated')
 
 class Tag(object):
 	def __init__(self, name, weight):
@@ -146,7 +165,26 @@ class VA(object):
 		self.name = name
 
 class EventHandler(pyinotify.ProcessEvent):
+	watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
+	def tell_me_bout_watch(self, watch_manager, watches):
+		self.watch_manager=watch_manager
+		self.watches=watches
+
+	def __add_watch(self, path):
+		self.watches.update(self.watch_manager.add_watch(path, self.watching_events, rec=False))
+		logging.debug('watch added: %s, wd is %s' % (path, self.watches[path]))
+
+	def __untag_artist_manual(self, path):
+		pass
+
+	def __block_tag(self, path):
+		tag = os.path.basename(path)
+		IGNORE_LIST.append(tag)
+		logging.info('"%s" tag has been added to ingnore list' % tag)
+		config_write()
+	
 	def __del_artist_from_tag(self, link):
+		"""used in __artist_delete(), not supposed to be used manually"""
 		try:
 			os.unlink(link)
 			logging.info('%s has been removed from %s' % (os.path.basename(link), os.path.basename(os.path.dirname(link))))
@@ -154,6 +192,7 @@ class EventHandler(pyinotify.ProcessEvent):
 			logging.error('Can\'t remove %s: %s' % (link, e.message))
 
 	def __event_path_determine(self, path):
+		# print path
 		if os.path.dirname(path)==WATCH_DIR:
 			self.event_type='artist'
 		elif os.path.dirname(path)==DEST_DIR:
@@ -187,19 +226,19 @@ class EventHandler(pyinotify.ProcessEvent):
 		self.__event_path_determine(event.pathname)
 		if self.event_type == 'artist':
 			self.__artist_create(event.pathname)
+		elif self.event_type == 'tag':
+			self.__add_watch(event.pathname)
 			
 	def process_IN_DELETE(self, event):
+		logging.debug('%s has been deleted' % event.pathname)
 		self.__event_path_determine(event.pathname)
 		if self.event_type == 'artist':
-			self.__artist_delete(event.pathname)		
+			self.__artist_delete(event.pathname)
+		elif self.event_type == 'tag':
+			self.__block_tag(event.pathname)
+		elif self.event_type == 'tag-artist':
+			self.__untag_artist_manual
 
-       
-# class DestDirEventHandler(pyinotify.ProcessEvent):
-# 	def process_IN_DELETE(self, event):
-# 		print 'deleted'
-# 		if (os.path.islink(event.pathname) and 
-# 			os.path.normpath(os.path.dirname(os.readlink(event.pathname)))==WATCH_DIR ):
-# 			print 'GOTCHA'
 
 def kill_zombie_musicians(folder):
 	for item in os.listdir(folder):
@@ -218,13 +257,21 @@ def rebuild():
 		artist.tags_calculate()
 		artist.make_ln()
 		
-logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
+watches={}
 watch_manager = pyinotify.WatchManager()
 watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
 handler=EventHandler()
 notifier = pyinotify.Notifier(watch_manager, handler)
-watch_dir_watch = watch_manager.add_watch(WATCH_DIR, watching_events, rec=False)
-dest_dir_watch = watch_manager.add_watch(DEST_DIR, watching_events, rec=True)
+handler.tell_me_bout_watch(watch_manager, watches)
+watches.update(watch_manager.add_watch(WATCH_DIR, watching_events, rec=False))
+watches.update(watch_manager.add_watch(DEST_DIR, watching_events, rec=False))
+
+for path in os.listdir(DEST_DIR):
+	path=os.path.join(DEST_DIR,path)
+	if os.path.isdir(path):
+		watches.update(watch_manager.add_watch(path, watching_events, rec=False))
+		logging.debug('watch added: %s, wd is %s' % (path, watches[path]))
 
 if REBUILD:
 	rebuild()
