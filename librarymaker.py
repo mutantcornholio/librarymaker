@@ -105,18 +105,25 @@ class Tag(object):
     @staticmethod
     def __count_valid_name(names):
         """takes possible tag names, to calculate best from them"""
-        pos = 0
-        while pos < len(names[0]):
-            if 0 in map(lambda x: x.count(names[0][:pos]), names):
-                number = 0
-                while number < len(names):
-                    if names[number][pos] == ' ' or names[number][pos] == '-':
-                        names[number] = names[number].replace(names[number][pos], DEFAULT_DELIMITER)
-                    else:
-                        names[number] = names[number][pos:] + DEFAULT_DELIMITER + names[number][:pos]
-                    number += 1
-            pos += 1
-        return names[0]
+        best = names[0]
+        delimeters = [' ','-']
+        for name in names[1:]:
+            pos = 0
+            overhead = 0
+            while pos < len(name):
+                if len(best) == pos:
+                    best += name[pos + overhead]
+                elif best[pos] == DEFAULT_DELIMITER:
+                    overhead += 1
+                elif best[pos] in delimeters:
+                    best = best[:pos] + DEFAULT_DELIMITER + best[pos+1:]
+                    overhead += 1
+                elif len(name) > pos + overhead and name[pos + overhead] in delimeters:
+                    best = best[:pos] + DEFAULT_DELIMITER + best[pos:]
+                pos += 1
+                print best
+
+        return best
 
     def __update_dir(self):
         good_dir = os.path.join(DEST_DIR, self.good_name)
