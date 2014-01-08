@@ -97,7 +97,7 @@ class Tag(object):
     def __init__(self, name, weight):
         self.name = name
         self.unified_name = name.replace('-', '').replace(' ', '')
-        self.good_name = ''
+        self.good_name = name
         self.weight = weight
         self.directory = ''
         self.directory_made = False
@@ -117,11 +117,9 @@ class Tag(object):
                     overhead += 1
                 elif best[pos] in delimeters:
                     best = best[:pos] + DEFAULT_DELIMITER + best[pos+1:]
-                    overhead += 1
                 elif len(name) > pos + overhead and name[pos + overhead] in delimeters:
                     best = best[:pos] + DEFAULT_DELIMITER + best[pos:]
                 pos += 1
-                print best
 
         return best
 
@@ -170,6 +168,7 @@ class Tag(object):
         else:
             possible_name = self.__count_valid_name([self.good_name, candidate])
             if possible_name != self.good_name:
+                self.good_name = possible_name
                 self.__update_dir()
 
     def make_dir(self):
@@ -225,19 +224,25 @@ class Artist(object):
                     self.popular_tags.append(tag)
 
     def __associate_tags(self):
+        self.associated_tags = []
         for tag in self.popular_tags:
             if tag.unified_name in tags.keys():
                 tags[tag.unified_name]['artists'].append(self)
                 tags[tag.unified_name]['object'].update_name(tag.name)
             else:
                 tags[tag.unified_name] = {'object': tag, 'artists': [self]}
+            self.associated_tags.append(tags[tag.unified_name]['object'])
 
     def __make_ln(self):
-        for tag in self.popular_tags:
-            artist_dir = os.path.join(DEST_DIR, tag.name, self.name)
+        for tag in self.associated_tags:
+            artist_dir = os.path.join(DEST_DIR, tag.good_name, self.name)
             if tag.directory_made:
-                os.symlink(os.path.join(WATCH_DIR, self.name), artist_dir)
-                tag.validate()
+                try:
+                    os.symlink(os.path.join(WATCH_DIR, self.name), artist_dir)
+                except OSError as e:
+                    #symlink could already exist, if artist has two similar tags
+                    if e.errno != 17:
+                        raise
                 logging.info('artist %s was tagged as %s' % (self.name, tag.name))
             else:
                 tag.make_dir()
@@ -258,6 +263,7 @@ something\'s not quite right: %s' % os.path.join(WATCH_DIR, self.name))
         self.raw = pylast.Artist(name, network)
         self.__tags_fetch()
         self.__tags_calculate()
+        self.__associate_tags()
         self.__make_ln()
 
     def delete(self):
