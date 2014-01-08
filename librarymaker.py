@@ -6,6 +6,7 @@ import pylast
 import os
 import sys
 import logging
+import shutil
 from time import sleep
 import simplejson
 
@@ -87,7 +88,9 @@ def config_write():
     logging.info('config file has been updated')
 
 
-valid_tags = []
+tags = {}
+# smth like {'unified_name_1':{'object'=tag_object, 'artists'=[Artist1, Artist2]}}
+artists = []
 
 
 class Tag(object):
@@ -96,7 +99,8 @@ class Tag(object):
         self.unified_name = name.replace('-', '').replace(' ', '')
         self.good_name = ''
         self.weight = weight
-        self.directory_made = 0
+        self.directory = ''
+        self.directory_made = False
 
     @staticmethod
     def __count_valid_name(names):
@@ -104,47 +108,84 @@ class Tag(object):
         pos = 0
         while pos < len(names[0]):
             if 0 in map(lambda x: x.count(names[0][:pos]), names):
-                for name in names:
-                    if name[pos] == ' ' or name[pos] == '-':
-                        name = name.replace(name[pos], DEFAULT_DELIMITER)
+                number = 0
+                while number < len(names):
+                    if names[number][pos] == ' ' or names[number][pos] == '-':
+                        names[number] = names[number].replace(names[number][pos], DEFAULT_DELIMITER)
                     else:
-                        name.insert(pos, DEFAULT_DELIMITER)
+                        names[number] = names[number][pos:] + DEFAULT_DELIMITER + names[number][:pos]
+                    number += 1
+            pos += 1
         return names[0]
 
-    def validate(self):
-        """checks for tags with similar names and fixes all those tags"""
-        candidates = filter((lambda x: x.unified_name == self.unified_name), valid_tags)
-        if len(candidates) > 0:
-            good_name = self.__count_valid_name(map(lambda x: getattr(x, 'name'), candidates))
-            for tag in candidates:
-                tag.good_name = good_name
-            self.good_name = good_name
-        valid_tags.append(self)
+    def __update_dir(self):
+        good_dir = os.path.join(DEST_DIR, self.good_name)
+
+        if good_dir == self.directory:
+            return
+
+        if not os.access(good_dir, os.F_OK):
+            self.directory = good_dir
+            try:
+                os.makedirs(self.directory)
+                self.directory_made = True
+                return
+            except Exception as e:
+                logging.exception(e)
+                raise e
+        elif not os.path.isdir(good_dir):
+            logging.error('__update_dir() failed: %s exists, but not a directory' % good_dir)
+            return
+        elif self.directory == '':
+            self.directory = good_dir
+            return
+
+        for item in os.listdir(self.directory):
+            try:
+                shutil.move(os.path.join(self.directory, item), os.path.join(good_dir, item))
+            except Exception as e:
+                logging.exception(e)
+                raise e
+
+        try:
+            os.rmdir(self.directory)
+        except Exception as e:
+            logging.exception(e)
+            raise e
+
+        self.directory = good_dir
+        logging.info('%s is renamed to %s' % (self.name, self.good_name))
+
+    def update_name(self, candidate):
+        """takes another name for tag, calculates best, changes directory, if needed"""
+        if candidate == self.good_name:
+            return
+        else:
+            possible_name = self.__count_valid_name([self.good_name, candidate])
+            if possible_name != self.good_name:
+                self.__update_dir()
 
     def make_dir(self):
-        if os.access(os.path.join(DEST_DIR, self.name), os.F_OK):
-            if not (os.path.isdir(os.path.join(DEST_DIR, self.name))
-                    and os.access(os.path.join(DEST_DIR, self.name), os.W_OK)):
+        directory = os.path.join(DEST_DIR, self.good_name)
+        if os.access(directory, os.F_OK):
+            if not (os.path.isdir(directory)
+                    and os.access(directory, os.W_OK)):
                 logging.warning('%s is already exist, but it is not a directory \
-or you don\'t have enough rights. Ignoring' % os.path.join(DEST_DIR, self.name))
-                self.directory_made = 0
+or you don\'t have enough rights. Ignoring' % directory)
+                self.directory_made = False
             else:
-                self.directory_made = 1
+                self.directory_made = True
         else:
-            os.makedirs(os.path.join(DEST_DIR, self.name))
-            self.directory_made = 1
-            logging.info('new tag: %s' % self.name)
+            self.directory = directory
+            os.makedirs(self.directory)
+            self.directory_made = True
+            logging.info('new tag: %s' % self.good_name)
 
 
 class Artist(object):
-    def __init__(self, name):
-        self.name = name
-        self.raw = pylast.Artist(name, network)
-        self.valid_tags = []
-
-    def tags_fetch(self):
+    def __tags_fetch(self):
         self.tags = []
-        while 1:
+        while True:
             try:
                 top_tags = self.raw.get_top_tags(limit=10)
                 break
@@ -155,39 +196,47 @@ class Artist(object):
                     return
                 else:
                     raise
-            except pylast.NetworkError as e:
+            except pylast.NetworkError:
                 logging.error('Network error')
                 sleep(RETRY_INTERVAL)
         for tag in top_tags:
             self.tags.append(Tag(tag.item.name.lower(), int(tag.weight)))
 
-    def tags_calculate(self):
+    def __tags_calculate(self):
+        self.popular_tags = []
         previous_weight = 0
         for tag in self.tags:
             if tag.name in IGNORE_LIST:
                 continue
             if previous_weight == 0:
-                self.valid_tags.append(tag)
+                self.popular_tags.append(tag)
                 previous_weight = tag.weight
             else:
                 if tag.weight < previous_weight * POPULARITY_THRESHOLD:
                     break
                 else:
-                    self.valid_tags.append(tag)
+                    self.popular_tags.append(tag)
 
-    def make_ln(self):
-        for tag in self.valid_tags:
+    def __associate_tags(self):
+        for tag in self.popular_tags:
+            if tag.unified_name in tags.keys():
+                tags[tag.unified_name]['artists'].append(self)
+                tags[tag.unified_name]['object'].update_name(tag.name)
+            else:
+                tags[tag.unified_name] = {'object': tag, 'artists': [self]}
+
+    def __make_ln(self):
+        for tag in self.popular_tags:
             artist_dir = os.path.join(DEST_DIR, tag.name, self.name)
-            if tag.directory_okay:
+            if tag.directory_made:
                 os.symlink(os.path.join(WATCH_DIR, self.name), artist_dir)
                 tag.validate()
                 logging.info('artist %s was tagged as %s' % (self.name, tag.name))
             else:
                 tag.make_dir()
-                if tag.directory_okay:
+                if tag.directory_made:
                     if not os.access(artist_dir, os.F_OK):
                         os.symlink(os.path.join(WATCH_DIR, self.name), artist_dir)
-                        tag.validate()
                         logging.info('artist %s was tagged as %s' % (self.name, tag.name))
                     elif os.path.islink(artist_dir):
                         if not os.path.samefile(os.readlink(artist_dir), os.path.join(WATCH_DIR, self.name)):
@@ -196,6 +245,27 @@ it is leading to %s instead of %s' % artist_dir, os.readlink(artist_dir), os.pat
                 else:
                     logging.warning('can\'t make directory, something\'s wrong, \
 something\'s not quite right: %s' % os.path.join(WATCH_DIR, self.name))
+
+    def __init__(self, name):
+        self.name = name
+        self.raw = pylast.Artist(name, network)
+        self.__tags_fetch()
+        self.__tags_calculate()
+        self.__make_ln()
+
+    def delete(self):
+        for tag in self.popular_tags:
+            if tag.unified_name in tags.keys():
+                tags[tag.unified_name]['artists'].remove(self)
+                path = os.path.join(DEST_DIR,
+                                    tags[tag.unified_name]['object'].good_name,
+                                    self.name)
+                try:
+                    os.unlink(path)
+                except Exception as e:
+                    logging.exception(e)
+                    logging.error('could not unlink %s' % path)
+        artists.remove(self)
 
 
 class VA(object):
@@ -223,6 +293,7 @@ class EventHandler(pyinotify.ProcessEvent):
         IGNORE_LIST.append(tag)
         logging.info('"%s" tag has been added to ingnore list' % tag)
         config_write()
+        tags.pop(tags[tag.replace('-', '').replace(' ', '')], None)
 
     @staticmethod
     def __del_artist_from_tag(link):
@@ -248,12 +319,9 @@ class EventHandler(pyinotify.ProcessEvent):
     @staticmethod
     def __artist_create(path):
         if os.path.isdir(path):
-            artist = Artist(str.decode(os.path.basename(path), 'utf8'))
-            artist.tags_fetch()
-            artist.tags_calculate()
-            artist.make_ln()
+            artists.append(Artist(str.decode(os.path.basename(path), 'utf8')))
         else:
-            logging.info('%s appeared, but it is not a directory. Ignoring.' \
+            logging.info('%s appeared, but it is not a directory. Ignoring.'
                          % os.path.basename(path))
 
     def __artist_delete(self, path):
@@ -264,7 +332,7 @@ class EventHandler(pyinotify.ProcessEvent):
                 for artist in os.listdir(tag):
                     artist = os.path.join(tag, artist)
                     if os.path.islink(artist) and \
-                                    os.readlink(artist) == os.path.join(WATCH_DIR, path):
+                            os.path.join(WATCH_DIR, path) == os.readlink(artist):
                         self.__del_artist_from_tag(artist)
         pass
 
@@ -298,11 +366,8 @@ def rebuild():
     for item in os.listdir(DEST_DIR):
         kill_zombie_musicians(os.path.join(DEST_DIR, item))
     artist_names = map(lambda s: s.decode('utf8', errors='ignore'), os.listdir(WATCH_DIR))
+    global artists
     artists = map(Artist, artist_names)
-    for artist in artists:
-        artist.tags_fetch()
-        artist.tags_calculate()
-        artist.make_ln()
 
 
 logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
@@ -319,7 +384,7 @@ for path in os.listdir(DEST_DIR):
     path = os.path.join(DEST_DIR, path)
     if os.path.isdir(path):
         watches.update(watch_manager.add_watch(path, watching_events, rec=False))
-        valid_tags.append(Tag(os.path.basename(path), 1))
+        #valid_tags.append(Tag(os.path.basename(path), 1))
         logging.debug('watch added: %s, wd is %s' % (path, watches[path]))
 
 if REBUILD:
