@@ -381,6 +381,7 @@ def rebuild():
     artist_names = map(lambda s: s.decode('utf8', errors='ignore'), os.listdir(WATCH_DIR))
     global artists
     artists = map(Artist, artist_names)
+    logging.info('rebuild done')
 
 
 logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
