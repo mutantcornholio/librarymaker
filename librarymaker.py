@@ -306,7 +306,7 @@ class EventHandler(pyinotify.ProcessEvent):
         IGNORE_LIST.append(tag)
         logging.info('"%s" tag has been added to ingnore list' % tag)
         config_write()
-        tags.pop(tags[tag.replace('-', '').replace(' ', '')], None)
+        tags.pop(tag.replace('-', '').replace(' ', ''), None)
 
     @staticmethod
     def __del_artist_from_tag(link):
