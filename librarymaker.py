@@ -84,7 +84,8 @@ def config_write():
         'POPULARITY_THRESHOLD': POPULARITY_THRESHOLD,
         'COMPILATIONS': COMPILATIONS,
         'API_KEY': API_KEY,
-        'DEFAULT_DELIMITER': DEFAULT_DELIMITER
+        'DEFAULT_DELIMITER': DEFAULT_DELIMITER,
+        'TAG_GROUPS': TAG_GROUPS
     }
     open(CONFIG_PATH, 'w').write(simplejson.dumps(dump))
     logging.info('config file has been updated')
