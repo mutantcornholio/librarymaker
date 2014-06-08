@@ -52,6 +52,7 @@ except KeyError, e:
     exit()
 except ValueError, e:
     sys.stderr.write('There\'s a problem in your config file: %s. Exiting.\n' % e.message)
+    exit()
 
 if not os.path.isdir(WATCH_DIR):
     sys.stderr.write('%s do not exist or not a directory, exiting\n' % WATCH_DIR)
@@ -384,7 +385,7 @@ def rebuild():
     logging.info('rebuild done')
 
 
-logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
 watches = {}
 watch_manager = pyinotify.WatchManager()
 watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
