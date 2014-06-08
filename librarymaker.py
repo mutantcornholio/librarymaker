@@ -249,10 +249,9 @@ class Artist(object):
                     if e.errno != 17:
                         raise
                 logging.info('artist %s was tagged as %s' % (self.name, tag.name))
-            elif os.path.islink(link_path):
-                if not os.path.samefile(os.readlink(link_path), os.path.join(WATCH_DIR, self.name)):
-                    logging.warning('%s is a symlink, but it is leading to %s instead of %s'
-                                    % link_path, os.readlink(link_path), os.path.join(WATCH_DIR, self.name))
+            else:
+                logging.warning('File already exists: %s. Symlink to %s has not been created' %
+                                (link_path, os.path.join(WATCH_DIR, self.name)))
 
     def __init__(self, name):
         self.name = name
