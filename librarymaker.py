@@ -44,6 +44,7 @@ try:
     COMPILATIONS = bool(config['COMPILATIONS'])
     API_KEY = config['API_KEY']
     DEFAULT_DELIMITER = config['DEFAULT_DELIMITER']
+    TAG_GROUPS = config['TAG_GROUPS']
 except simplejson.decoder.JSONDecodeError, e:
     sys.stderr.write('Something\'s wrong with your config file: %s. Exiting.\n' % e.message)
     exit()
@@ -103,6 +104,16 @@ class Tag(object):
         self.directory = ''
         self.directory_made = False
 
+    def update_name(self, candidate):
+        """takes another name for tag, calculates best, changes directory, if needed"""
+        if candidate == self.good_name:
+            return
+        else:
+            possible_name = self.__count_valid_name([self.good_name, candidate])
+            if possible_name != self.good_name:
+                self.good_name = possible_name
+                self.__update_dir()
+
     @staticmethod
     def __count_valid_name(names):
         """takes possible tag names, to calculate best from them"""
@@ -161,16 +172,6 @@ class Tag(object):
 
         self.directory = good_dir
         logging.info('%s is renamed to %s' % (self.name, self.good_name))
-
-    def update_name(self, candidate):
-        """takes another name for tag, calculates best, changes directory, if needed"""
-        if candidate == self.good_name:
-            return
-        else:
-            possible_name = self.__count_valid_name([self.good_name, candidate])
-            if possible_name != self.good_name:
-                self.good_name = possible_name
-                self.__update_dir()
 
     def make_dir(self):
         directory = os.path.join(DEST_DIR, self.good_name)
