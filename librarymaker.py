@@ -107,7 +107,7 @@ class Tag(object):
     def __count_valid_name(names):
         """takes possible tag names, to calculate best from them"""
         best = names[0]
-        delimeters = [' ','-']
+        delimeters = [' ', '-']
         for name in names[1:]:
             pos = 0
             overhead = 0
@@ -350,6 +350,8 @@ class EventHandler(pyinotify.ProcessEvent):
                         self.__del_artist_from_tag(artist)
         pass
 
+    # there is bad naming in module itself
+    # noinspection PyPep8Naming
     def process_IN_CREATE(self, event):
         self.__event_path_determine(event.pathname)
         if self.event_type == 'artist':
@@ -357,6 +359,7 @@ class EventHandler(pyinotify.ProcessEvent):
         elif self.event_type == 'tag':
             self.__add_watch(event.pathname)
 
+    # noinspection PyPep8Naming
     def process_IN_DELETE(self, event):
         logging.debug('%s has been deleted' % event.pathname)
         self.__event_path_determine(event.pathname)
@@ -385,7 +388,7 @@ def rebuild():
     logging.info('rebuild done')
 
 
-    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
 watches = {}
 watch_manager = pyinotify.WatchManager()
 watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
