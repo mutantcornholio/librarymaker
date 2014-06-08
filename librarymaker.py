@@ -237,28 +237,22 @@ class Artist(object):
 
     def __make_ln(self):
         for tag in self.associated_tags:
-            artist_dir = os.path.join(DEST_DIR, tag.good_name, self.name)
-            if tag.directory_made:
+            link_path = os.path.join(DEST_DIR, tag.good_name, self.name)
+            if not tag.directory_made:
+                tag.make_dir()
+
+            if not os.access(link_path, os.F_OK):
                 try:
-                    os.symlink(os.path.join(WATCH_DIR, self.name), artist_dir)
+                    os.symlink(os.path.join(WATCH_DIR, self.name), link_path)
                 except OSError as e:
                     #symlink could already exist, if artist has two similar tags
                     if e.errno != 17:
                         raise
                 logging.info('artist %s was tagged as %s' % (self.name, tag.name))
-            else:
-                tag.make_dir()
-                if tag.directory_made:
-                    if not os.access(artist_dir, os.F_OK):
-                        os.symlink(os.path.join(WATCH_DIR, self.name), artist_dir)
-                        logging.info('artist %s was tagged as %s' % (self.name, tag.name))
-                    elif os.path.islink(artist_dir):
-                        if not os.path.samefile(os.readlink(artist_dir), os.path.join(WATCH_DIR, self.name)):
-                            logging.warning('%s is a symlink, but \
-it is leading to %s instead of %s' % artist_dir, os.readlink(artist_dir), os.path.join(WATCH_DIR, self.name))
-                else:
-                    logging.warning('can\'t make directory, something\'s wrong, \
-something\'s not quite right: %s' % os.path.join(WATCH_DIR, self.name))
+            elif os.path.islink(link_path):
+                if not os.path.samefile(os.readlink(link_path), os.path.join(WATCH_DIR, self.name)):
+                    logging.warning('%s is a symlink, but it is leading to %s instead of %s'
+                                    % link_path, os.readlink(link_path), os.path.join(WATCH_DIR, self.name))
 
     def __init__(self, name):
         self.name = name
