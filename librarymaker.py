@@ -249,7 +249,7 @@ class Artist(object):
                         link_path
                     )
                 except OSError as e:
-                    #symlink could already exist, if artist has two similar tags
+                    # symlink could already exist, if artist has two similar tags
                     if e.errno != 17:
                         raise
                 logging.info('artist %s was tagged as %s' % (self.name, tag.name))
@@ -400,7 +400,6 @@ for path in os.listdir(DEST_DIR):
     path = os.path.join(DEST_DIR, path)
     if os.path.isdir(path):
         watches.update(watch_manager.add_watch(path, watching_events, rec=False))
-        #valid_tags.append(Tag(os.path.basename(path), 1))
         logging.debug('watch added: %s, wd is %s' % (path, watches[path]))
 
 if REBUILD:
