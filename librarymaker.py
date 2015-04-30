@@ -244,7 +244,10 @@ class Artist(object):
 
             if not os.access(link_path, os.F_OK):
                 try:
-                    os.symlink(os.path.join(WATCH_DIR, self.name), link_path)
+                    os.symlink(
+                        os.path.relpath(os.path.join(WATCH_DIR, self.name), os.path.dirname(link_path)),
+                        link_path
+                    )
                 except OSError as e:
                     #symlink could already exist, if artist has two similar tags
                     if e.errno != 17:
