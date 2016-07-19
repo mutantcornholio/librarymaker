@@ -67,10 +67,6 @@ if not os.access(DEST_DIR, os.W_OK):
     sys.stderr.write('you do not seem to have write rights to this destination directory: "%s", exiting \n' % DEST_DIR)
     exit()
 
-if not os.access(LOG_FILE, os.W_OK):
-    sys.stderr.write('you do not seem to have write rights to this log file: "%s", exiting \n' % LOG_FILE)
-    exit()
-
 network = pylast.LastFMNetwork(api_key=API_KEY)
 
 
@@ -385,8 +381,13 @@ def rebuild():
     artists = map(Artist, artist_names)
     logging.info('rebuild done')
 
+try:
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
+except Exception, e:
+    sys.stderr.write('you do not seem to have write rights to this log file: "%s", exiting \n' % LOG_FILE)
+    exit()
 
-logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
+
 watches = {}
 watch_manager = pyinotify.WatchManager()
 watching_events = pyinotify.IN_CREATE | pyinotify.IN_DELETE
