@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf8 -*-
 import pyinotify
 import argparse
@@ -8,7 +8,7 @@ import sys
 import logging
 import shutil
 from time import sleep
-import simplejson
+import json
 
 parser = argparse.ArgumentParser(description='A python script, that organizes your library in tags, using symlinks.\n\
 https://github.com/mutantcornholio/librarymaker')
@@ -34,7 +34,7 @@ located in \n' % CONFIG_PATH)
     exit()
 
 try:
-    config = simplejson.loads(open(CONFIG_PATH, 'r').read())
+    config = json.loads(open(CONFIG_PATH, 'r').read())
     WATCH_DIR = os.path.normpath(config['WATCH_DIR'])
     DEST_DIR = os.path.normpath(config['DEST_DIR'])
     LOG_FILE = os.path.normpath(config['LOG_FILE'])
@@ -45,13 +45,13 @@ try:
     API_KEY = config['API_KEY']
     DEFAULT_DELIMITER = config['DEFAULT_DELIMITER']
     TAG_GROUPS = config['TAG_GROUPS']
-except simplejson.decoder.JSONDecodeError, e:
+except json.decoder.JSONDecodeError as e:
     sys.stderr.write('Something\'s wrong with your config file: %s. Exiting.\n' % e.message)
     exit()
-except KeyError, e:
+except KeyError as e:
     sys.stderr.write('%s is missing in your config file. Exiting.\n' % e.message)
     exit()
-except ValueError, e:
+except ValueError as e:
     sys.stderr.write('There\'s a problem in your config file: %s. Exiting.\n' % e.message)
     exit()
 
@@ -83,7 +83,7 @@ def config_write():
         'DEFAULT_DELIMITER': DEFAULT_DELIMITER,
         'TAG_GROUPS': TAG_GROUPS
     }
-    open(CONFIG_PATH, 'w').write(simplejson.dumps(dump))
+    open(CONFIG_PATH, 'w').write(json.dumps(dump))
     logging.info('config file has been updated')
 
 
@@ -125,7 +125,7 @@ class Tag(object):
                 elif best[pos] == DEFAULT_DELIMITER:
                     overhead += 1
                 elif best[pos] in delimeters:
-                    best = best[:pos] + DEFAULT_DELIMITER + best[pos+1:]
+                    best = best[:pos] + DEFAULT_DELIMITER + best[pos + 1:]
                 elif len(name) > pos + overhead and name[pos + overhead] in delimeters:
                     best = best[:pos] + DEFAULT_DELIMITER + best[pos:]
                 pos += 1
@@ -311,7 +311,7 @@ class EventHandler(pyinotify.ProcessEvent):
             logging.info('%s has been removed from %s' %
                          (os.path.basename(link),
                           os.path.basename(os.path.dirname(link))))
-        except Exception, e:
+        except Exception as e:
             logging.error('Can\'t remove %s: %s' % (link, e.message))
 
     def __event_path_determine(self, path):
@@ -381,12 +381,12 @@ def rebuild():
     artists = map(Artist, artist_names)
     logging.info('rebuild done')
 
+
 try:
     logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', filename=LOG_FILE, level=logging.DEBUG)
-except Exception, e:
+except Exception as e:
     sys.stderr.write('you do not seem to have write rights to this log file: "%s", exiting \n' % LOG_FILE)
     exit()
-
 
 watches = {}
 watch_manager = pyinotify.WatchManager()
